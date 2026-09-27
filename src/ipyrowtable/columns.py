@@ -11,6 +11,8 @@ stored value.
 
 from __future__ import annotations
 
+import math
+
 import ipywidgets as widgets
 
 from .formatting import formatter, right_aligned, tidy
@@ -98,6 +100,11 @@ class InputColumn(Column):
         """Show `value` (base units) in `widget` after a unit-system change."""
         widget.value = self.to_display(value, units)
 
+    def validate(self, value):
+        """Check a saved value (base units) before it is restored; return it, possibly
+        normalized, or raise ValueError. The default accepts anything."""
+        return value
+
 
 class NumberColumn(InputColumn):
     """A number per row.
@@ -138,6 +145,19 @@ class NumberColumn(InputColumn):
                 widget.min, widget.max = lo, hi
         widget.value = self.to_display(value, units)
 
+    def validate(self, value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{self.key}: expected a number, got {value!r}")
+        value = float(value)
+        if not math.isfinite(value):
+            raise ValueError(f"{self.key}: {value} is not a finite number")
+        # allow for round-off from converting through display units
+        if self.min is not None and value < self.min - 1e-9 * max(1.0, abs(self.min)):
+            raise ValueError(f"{self.key}: {value:g} is below the minimum {self.min:g}")
+        if self.max is not None and value > self.max + 1e-9 * max(1.0, abs(self.max)):
+            raise ValueError(f"{self.key}: {value:g} is above the maximum {self.max:g}")
+        return value
+
 
 class ChoiceColumn(InputColumn):
     """A dropdown; the row value is the chosen option's key.
@@ -175,6 +195,11 @@ class ChoiceColumn(InputColumn):
             widget.options = self._choices(units)  # this resets the selection...
         widget.value = value  # ...so restore it
 
+    def validate(self, value):
+        if value not in self.options:
+            raise ValueError(f"{self.key}: {value!r} is not one of the options")
+        return value
+
 
 class TextColumn(InputColumn):
     """Free text per row (e.g. a name or tag); updates when the box loses focus."""
@@ -188,6 +213,11 @@ class TextColumn(InputColumn):
         return widgets.Text(
             value=value, continuous_update=False, layout=widgets.Layout(width="100%")
         )
+
+    def validate(self, value):
+        if not isinstance(value, str):
+            raise ValueError(f"{self.key}: expected text, got {value!r}")
+        return value
 
 
 class OutputColumn(Column):

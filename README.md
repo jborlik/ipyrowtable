@@ -2,8 +2,9 @@
 
 Editable [ipywidgets](https://ipywidgets.readthedocs.io) tables for problems made of elements
 in series: wall layers, pipe segments, cable runs, process stages. You describe the columns
-and write a `compute` function; ipyrowtable gives you a table where users add and remove rows,
-edit inputs, and see computed results update immediately.
+and write a `compute` function; ipyrowtable gives a table where Jupyter users add and remove 
+rows, edit inputs, see computed results update immediately, and easily use the configured inputs
+in downstream cells.
 
 ![A layer table with an SI / Imperial toggle and a live temperature profile](docs/screenshot.png)
 
@@ -17,6 +18,8 @@ What sets it apart from a general-purpose data grid:
 - **Unit systems.** A toggle switches everything shown between, say, SI and Imperial. Values
   are stored in your base units, so switching never changes the physics or drifts.
 - **Live plots.** `LiveFigure` keeps a matplotlib figure in step with the table.
+- **Saved between sessions.** A table can keep its inputs across kernel restarts, making it a
+  friendlier alternative to a hard-coded dict of inputs.
 
 It suits small, carefully entered inputs: tens of rows, not thousands. For large data, use a
 grid such as [ipydatagrid](https://github.com/jupyter-widgets/ipydatagrid) or Panel's
@@ -149,6 +152,41 @@ After every change:
   inputs are invalid.
 - `table.error` says what went wrong, if anything did.
 
+### Saving inputs between sessions
+
+```python
+cable = RowTable(..., rows=[...], persist="feeder")
+```
+
+With a `persist` key, the table saves its inputs whenever they change and restores them when
+a table with the same key is created again, for example after a kernel restart. The inputs
+are the rows, boundary values, parameters, and the unit system that was showing.
+
+`rows`, `edges`, `params` and `units` then become the *initial* values. They're used:
+
+- when nothing has been saved yet;
+- when the saved inputs can't be used, for example because an option no longer exists (the
+  table says why, and keeps the old file as a `.bak` copy before replacing it);
+- by the **Reset** button, which asks for a second click first.
+
+Where the inputs go:
+
+- By default, into `<notebook name>.ipyrowtable.json` next to the notebook. If the notebook
+  can't be identified, they go into `ipyrowtable.json` in the working folder. The note under
+  the table names the file.
+- `persist_file=` picks a different file. One file can hold many tables, each under its own
+  key.
+- Values are stored as plain JSON in base units, so it doesn't matter which unit system was
+  showing.
+
+They go in a file rather than the notebook's metadata because the kernel can't write
+notebook metadata.
+
+To always start from the initial values, leave out `persist`. The environment variable
+`IPYROWTABLE_PERSIST=off` turns saving off for every table, which is useful for batch runs
+that must start from known inputs. `table.get_inputs()` and `table.set_inputs(snapshot)` let
+you keep and load snapshots yourself, such as several named designs.
+
 ### Plots
 
 ```python
@@ -165,12 +203,13 @@ side_by_side(cable, LiveFigure(cable, draw=draw))
 
 Every part carries a CSS class you can style:
 
-- `ipyrowtable-grid`, `ipyrowtable-add`, `ipyrowtable-message`
+- `ipyrowtable-grid`, `ipyrowtable-add`, `ipyrowtable-reset`, `ipyrowtable-message`,
+  `ipyrowtable-persist`
 - `ipyrowtable-<key>` on each column's cells
 
 ## Examples
 
-The [`examples/`](examples) folder has three notebooks:
+The [`examples/`](examples) folder has four notebooks:
 
 1. **01_getting_started**: a first table, values between rows, a live plot, driving a table
    from code.
@@ -178,6 +217,8 @@ The [`examples/`](examples) folder has three notebooks:
    own solver.
 3. **03_extending**: pipes in series (Darcy–Weisbach). Covers your own unit systems, a custom
    column type, parameters, `on_update`, and styling.
+4. **04_saving_inputs**: keeping a table's inputs between sessions: initial values, the
+   saved file, named snapshots, resetting, and turning saving off.
 
 ## FAQ
 

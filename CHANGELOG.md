@@ -13,3 +13,7 @@ First release.
 - `TableResults`, with base and display values and `records()`.
 - `LiveFigure` for matplotlib plots that follow the table; `side_by_side` layout helper.
 - `ipyrowtable.examples.conduction`: steady conduction through a plane composite wall.
+- Saving inputs between sessions: `persist=` and `persist_file=` on `RowTable` (and
+  `LayerStack`), with a Reset button, fallback to the initial values when the saved inputs
+  can't be used, and `IPYROWTABLE_PERSIST=off` to turn saving off everywhere.
+- `get_inputs()` / `set_inputs()` and `reset()` on `RowTable`; `validate()` on input columns.

@@ -111,3 +111,19 @@ def test_profile_plot_renders_and_updates(solara_test, page_session):
     first = img.get_attribute("src")
     page_session.locator(".ipyrowtable-add").click()
     wait_until(lambda: img.get_attribute("src") != first)  # redrawn after the change
+
+
+def test_reset_button_in_the_browser(solara_test, page_session, tmp_path):
+    stack = LayerStack(persist="wall", persist_file=tmp_path / "inputs.json")
+    page = show(page_session, stack)
+
+    page.locator(".ipyrowtable-add").click()
+    wait_until(lambda: len(stack) == 3)
+    page.locator(".ipyrowtable-persist", has_text="Saved to inputs.json").wait_for()
+
+    reset = page.locator(".ipyrowtable-reset")
+    reset.click()
+    page.locator(".ipyrowtable-reset", has_text="Confirm reset").wait_for()
+    reset.click()
+    wait_until(lambda: len(stack) == 2)
+    page.locator(".ipyrowtable-persist", has_text="Reset to the initial values.").wait_for()

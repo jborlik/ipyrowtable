@@ -21,7 +21,7 @@ The suite tests at several levels, from pure logic up to a real browser:
 | Level | Files | What it checks |
 |---|---|---|
 | Logic | `test_units_and_formatting.py`, `test_columns.py` | unit conversions, number formatting, column widgets, header templates |
-| Widget behavior | `test_table.py`, `test_units_toggle.py`, `test_results_and_errors.py`, `test_figure.py` | builds real widgets and drives them the way a user does (see below) |
+| Widget behavior | `test_table.py`, `test_units_toggle.py`, `test_results_and_errors.py`, `test_figure.py`, `test_persistence.py` | builds real widgets and drives them the way a user does (see below) |
 | Invariants | `test_properties.py` | property-based tests (see below) |
 | Physics | `test_conduction.py` | the conduction example against independent checks (see below) |
 | Examples | `test_notebooks.py` | runs every notebook in `examples/` top to bottom in a fresh kernel |
@@ -32,8 +32,8 @@ does, and call `button.click()`, which runs the same handlers as a mouse click. 
 check what the table shows and stores. No browser or kernel is needed.
 
 **Invariants.** A hypothesis state machine plays random sequences of user actions: add and
-remove rows, type thicknesses, pick materials, set boundaries, flip units. After every step
-it checks:
+remove rows, type thicknesses, pick materials, set boundaries, flip units, and start a "new
+session" (a fresh table restoring the saved inputs). After every step it checks:
 
 - the grid layout
 - the stored values, against a simple model

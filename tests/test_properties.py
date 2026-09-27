@@ -3,10 +3,15 @@
 1. Unit conversions round-trip for any value.
 2. A state machine plays random sequences of user actions against a table -- add and remove
    rows with the buttons, type thicknesses, pick materials, set boundary temperatures, flip
-   units -- while keeping its own simple model of what the table *should* hold. After every
-   step it checks the layout, the stored values, what is displayed, and the physics (against
-   an independent nodal-balance solve). Hypothesis shrinks any failure to a minimal sequence.
+   units, and start a new session (a fresh table restoring the saved inputs) -- while
+   keeping its own simple model of what the table *should* hold. After every step it checks
+   the layout, the stored values, what is displayed, and the physics (against an independent
+   nodal-balance solve). Hypothesis shrinks any failure to a minimal sequence.
 """
+
+import shutil
+import tempfile
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -69,7 +74,9 @@ def nodal_solve(L, k, T_first, T_last):
 class WallMachine(RuleBasedStateMachine):
     @initialize()
     def start(self):
-        self.table = make_wall()
+        self.folder = Path(tempfile.mkdtemp(prefix="ipyrowtable-"))
+        self.state_file = self.folder / "inputs.json"
+        self.table = make_wall(persist="wall", persist_file=self.state_file)
         # the model: what the table should store, in base units
         self.layers = [["steel", 0.010], ["foam", 0.050]]
         self.edges = [100.0, 20.0]
@@ -116,6 +123,17 @@ class WallMachine(RuleBasedStateMachine):
     @rule(name=st.sampled_from(["metric", "US"]))
     def switch_units(self, name):
         self.table.units_toggle.value = name
+
+    @rule()
+    def new_session(self):
+        """A fresh table with the same key picks up exactly where the last one left off."""
+        units = self.table.units.name
+        self.table = make_wall(persist="wall", persist_file=self.state_file)
+        if self.state_file.exists():
+            assert self.table.units.name == units
+
+    def teardown(self):
+        shutil.rmtree(self.folder, ignore_errors=True)
 
     # ---- what must always hold
 

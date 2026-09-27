@@ -133,7 +133,7 @@ class LayerStack(RowTable):
     """The layer table: material and thickness in; conductance and interface temperature out."""
 
     def __init__(self, layers=None, T_top=None, T_bottom=None, units="SI", materials=None,
-                 solver=solve_series_conduction):
+                 solver=solve_series_conduction, persist=None, persist_file=None):
         """
         layers    : iterable of (material_name, thickness), top to bottom, in `units`
                     (mm for SI, inches for Imperial). Defaults to a steel + insulation example.
@@ -142,6 +142,9 @@ class LayerStack(RowTable):
         units     : "SI" or "Imperial" (the toggle can change it later)
         materials : dict {name: k in W/(m·K)}; defaults to MATERIALS
         solver    : function(thicknesses_m, k, T_top_C, T_bottom_C) -> (conductances, temps_C, q)
+        persist   : key to save the inputs under between sessions (see RowTable); the
+                    arguments above are then the initial values
+        persist_file : where to save; default beside the notebook
         """
         self.materials = dict(materials or MATERIALS)
         self.solver = solver
@@ -174,6 +177,8 @@ class LayerStack(RowTable):
             item_name="layer",
             summary=self._summary,
             output_quantities={"q": "heat_flux", "R_total": "resistance", "U_total": "conductance"},
+            persist=persist,
+            persist_file=persist_file,
         )
 
     def _compute(self, inputs):

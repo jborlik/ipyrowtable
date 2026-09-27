@@ -1,8 +1,11 @@
 """Run every example notebook top to bottom in a fresh kernel.
 
-This keeps the examples honest: any API change that breaks them fails here.
+This keeps the examples honest: any API change that breaks them fails here. The notebooks
+run in a temporary copy of the examples folder, so files they save (such as saved table
+inputs) never land in the repository.
 """
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -17,10 +20,13 @@ NOTEBOOKS = sorted(EXAMPLES.glob("*.ipynb"))
 
 @pytest.mark.notebooks
 @pytest.mark.parametrize("path", NOTEBOOKS, ids=[p.name for p in NOTEBOOKS])
-def test_notebook_runs_without_errors(path):
-    nb = nbformat.read(path, as_version=4)
+def test_notebook_runs_without_errors(path, tmp_path, monkeypatch):
+    workdir = tmp_path / "examples"
+    shutil.copytree(EXAMPLES, workdir)
+    monkeypatch.delenv("IPYROWTABLE_PERSIST", raising=False)
+    nb = nbformat.read(workdir / path.name, as_version=4)
     client = nbclient.NotebookClient(
-        nb, timeout=180, kernel_name="python3", resources={"metadata": {"path": str(EXAMPLES)}}
+        nb, timeout=180, kernel_name="python3", resources={"metadata": {"path": str(workdir)}}
     )
     client.execute()  # raises CellExecutionError, with the failing cell, on any error
     errors = [o for cell in nb.cells for o in cell.get("outputs", []) if o.output_type == "error"]

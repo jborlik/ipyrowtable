@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import copy
 import html
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import ipywidgets as widgets
 import numpy as np
 
 from .columns import Column, InputColumn, NodeColumn, OutputColumn
 from .formatting import right_aligned
+from .persistence import StateFile, StateFileError, default_state_file, persistence_enabled
 from .units import UnitSystem
 
 __all__ = ["RowTable", "TableInputs", "TableResults"]
@@ -133,6 +136,16 @@ class RowTable(widgets.VBox):
         HTML shown under the table after each recompute.
     output_quantities : dict, optional
         {extra output key: quantity name}, so ``results.display(key)`` converts extra outputs.
+    persist : str, optional
+        Save the inputs (rows, boundary values, parameters and unit system) whenever they
+        change, under this key, and restore them the next time a table with the same key is
+        created. `rows`, `edges`, `params` and `units` are then the *initial* values, used
+        only when nothing usable has been saved, and by the Reset button. None (the default)
+        always starts from the initial values. The environment variable
+        IPYROWTABLE_PERSIST=off turns saving off for every table.
+    persist_file : str or Path, optional
+        Where to save. Default: `<notebook name>.ipyrowtable.json` beside the notebook, or
+        `ipyrowtable.json` in the working directory if the notebook can't be identified.
 
     Attributes
     ----------
@@ -142,6 +155,10 @@ class RowTable(widgets.VBox):
         Why the latest recompute failed, if it did.
     grid, add_button, message, units_toggle : widgets
         Sub-widgets, e.g. for styling. `units_toggle` is None with a single unit system.
+    reset_button, persist_note : widgets
+        Shown when saving is on; None otherwise.
+    persist_file : Path or None
+        The file inputs are saved to, when saving is on.
     """
 
     REMOVE_WIDTH = "34px"
@@ -163,8 +180,11 @@ class RowTable(widgets.VBox):
         removable=True,
         summary=None,
         output_quantities=None,
+        persist=None,
+        persist_file=None,
     ):
         super().__init__()
+        self._loading = True  # no saving while the table is being built
         self.add_class("ipyrowtable")
         self.columns = list(columns)
         _check_columns(self.columns)
@@ -204,7 +224,7 @@ class RowTable(widgets.VBox):
                 style={"button_width": "90px"},
             )
             self.units_toggle.add_class("ipyrowtable-units")
-            self.units_toggle.observe(lambda ch: self._set_units(ch.new), names="value")
+            self.units_toggle.observe(self._on_units_toggle, names="value")
             children.append(self.units_toggle)
 
         # ---- parameters
@@ -283,7 +303,29 @@ class RowTable(widgets.VBox):
         self.add_button.on_click(lambda _: self.add_row())
         self.message = widgets.HTML()
         self.message.add_class("ipyrowtable-message")
-        self.children = children + [self.grid, self.add_button, self.message]
+
+        self.persist_key = persist if persist and persistence_enabled() else None
+        self._store = None
+        self.reset_button = self.persist_note = None
+        buttons = [self.add_button]
+        if self.persist_key:
+            self._store = StateFile(persist_file if persist_file else default_state_file())
+            self.reset_button = widgets.Button(
+                description="Reset", icon="undo", tooltip="Go back to the initial values"
+            )
+            self.reset_button.add_class("ipyrowtable-reset")
+            self.reset_button.on_click(self._on_reset_click)
+            self._reset_armed = False
+            buttons.append(self.reset_button)
+            self.persist_note = widgets.HTML()
+            self.persist_note.add_class("ipyrowtable-persist")
+        self._backup_pending = False
+        self.children = children + [
+            self.grid,
+            widgets.HBox(buttons) if len(buttons) > 1 else self.add_button,
+            self.message,
+            *([self.persist_note] if self.persist_note is not None else []),
+        ]
 
         if rows is None:
             rows = [{}] * max(self.min_rows, 1)
@@ -293,6 +335,11 @@ class RowTable(widgets.VBox):
             self._append_row(values)
         self._update_labels()
         self._rebuild()
+
+        self._initial_state = copy.deepcopy(self.get_inputs())
+        if self._store is not None:
+            self._restore()
+        self._loading = False
 
     # ----------------------------------------------------------------- public API
 
@@ -331,15 +378,23 @@ class RowTable(widgets.VBox):
         self._rebuild()
 
     def _append_row(self, values):
+        """Append a row given display-unit values (missing keys use defaults)."""
         u = self._units
         values = values or {}
         unknown = set(values) - {c.key for c in self._inputs}
         if unknown:
             raise KeyError(f"Unknown input column(s): {sorted(unknown)}")
+        self._append_row_base({
+            c.key: c.to_base(values[c.key], u) if c.key in values else c.default_value(u)
+            for c in self._inputs
+        })
 
+    def _append_row_base(self, base_values):
+        """Append a row given a complete dict of base-unit values."""
+        u = self._units
         row = {"values": {}, "widgets": {}, "outputs": {}}
         for col in self._inputs:
-            value = col.to_base(values[col.key], u) if col.key in values else col.default_value(u)
+            value = base_values[col.key]
             widget = col.create_widget(value, u)
             widget.add_class(f"ipyrowtable-{col.key}")
             widget.observe(lambda ch, r=row, c=col: self._on_row_input(r, c, ch.new), names="value")
@@ -363,8 +418,7 @@ class RowTable(widgets.VBox):
         if len(self._rows) <= self.min_rows:
             return False
         self._rows.remove(row)
-        for widget in [*row["widgets"].values(), *row["outputs"].values(), row["remove"]]:
-            widget.close()
+        _close_row(row)
         self._rebuild()
         return True
 
@@ -415,6 +469,39 @@ class RowTable(widgets.VBox):
         """Run compute again, e.g. after changing data your compute function reads."""
         self._recompute()
 
+    # ----------------------------------------------------------------- state
+
+    def get_inputs(self) -> dict:
+        """A JSON-ready snapshot of the inputs, in base units.
+
+        {"units": name, "rows": [{key: value}], "edges": {key: [first, last]},
+        "params": {key: value}}; an end of a NodeColumn that isn't an input is None.
+        """
+        return {
+            "units": self._units.name,
+            "rows": [{k: _plain(v) for k, v in r["values"].items()} for r in self._rows],
+            "edges": {k: [_plain(v) for v in values] for k, values in self._edge_values.items()},
+            "params": {k: _plain(v) for k, v in self._param_values.items()},
+        }
+
+    def set_inputs(self, state: dict) -> None:
+        """Load a snapshot from `get_inputs` (or a saved file).
+
+        Keys for columns that no longer exist are ignored, and missing ones get defaults.
+        Raises ValueError, leaving the table unchanged, if a value can't be used.
+        """
+        self._apply_state(self._validate_state(state))
+
+    def reset(self) -> None:
+        """Go back to the initial rows, boundary values, parameters and unit system."""
+        self._apply_state(copy.deepcopy(self._initial_state))
+        if self.persist_note is not None:
+            self._note("Reset to the initial values.")
+
+    @property
+    def persist_file(self) -> Path | None:
+        return self._store.path if self._store is not None else None
+
     # ----------------------------------------------------------------- event handlers
 
     def _on_row_input(self, row, col, value):
@@ -432,10 +519,23 @@ class RowTable(widgets.VBox):
             self._edge_values[col.key][_ENDS.index(end)] = col.ends[end].to_base(value, self._units)
             self._recompute()
 
+    def _on_units_toggle(self, change):
+        if not self._syncing:
+            self._set_units(change.new)
+
     def _set_units(self, name):
-        u = self._units = self.unit_systems[name]
+        self._units = self.unit_systems[name]
+        self._refresh_widgets()
+        self._update_labels()
+        self._recompute()
+
+    def _refresh_widgets(self):
+        """Show every stored (base) value in its widget, in the current units."""
+        u = self._units
         self._syncing = True
         try:
+            if self.units_toggle is not None:
+                self.units_toggle.value = u.name
             for row in self._rows:
                 for col in self._inputs:
                     col.refresh(row["widgets"][col.key], row["values"][col.key], u)
@@ -448,8 +548,133 @@ class RowTable(widgets.VBox):
                         col.ends[end].refresh(widget, self._edge_values[col.key][index], u)
         finally:
             self._syncing = False
+
+    def _validate_state(self, state) -> dict:
+        """Check a snapshot and fill gaps; returns a complete snapshot or raises ValueError."""
+        if not isinstance(state, dict):
+            raise ValueError("the saved inputs aren't a table")
+        name = state.get("units")  # an unknown or missing unit system means the initial one
+        units = self.unit_systems.get(name) or self.unit_systems[self._initial_state["units"]]
+        rows = state.get("rows")
+        if not isinstance(rows, list):
+            raise ValueError("the saved inputs have no list of rows")
+        if len(rows) < max(self.min_rows, 1):
+            raise ValueError(f"need at least {max(self.min_rows, 1)} row(s), found {len(rows)}")
+        clean_rows = []
+        for i, row in enumerate(rows, start=1):
+            if not isinstance(row, dict):
+                raise ValueError(f"row {i} isn't a set of column values")
+            clean = {}
+            for col in self._inputs:
+                try:
+                    clean[col.key] = (col.validate(row[col.key]) if col.key in row
+                                      else col.default_value(units))
+                except ValueError as exc:
+                    raise ValueError(f"row {i}, {exc}") from None
+            clean_rows.append(clean)
+
+        saved_edges = state.get("edges") or {}
+        if not isinstance(saved_edges, dict):
+            raise ValueError("the saved boundary values aren't a mapping")
+        clean_edges = {}
+        for col in self._nodes:
+            given = saved_edges.get(col.key)
+            if given is not None and (not isinstance(given, list) or len(given) != 2):
+                raise ValueError(f"{col.key}: expected [first, last] boundary values")
+            values = []
+            for index, end in enumerate(_ENDS):
+                if end not in col.inputs:
+                    values.append(None)
+                elif given is None or given[index] is None:
+                    values.append(col.ends[end].default_value(units))
+                else:
+                    values.append(col.ends[end].validate(given[index]))
+            clean_edges[col.key] = values
+
+        saved_params = state.get("params") or {}
+        if not isinstance(saved_params, dict):
+            raise ValueError("the saved parameters aren't a mapping")
+        clean_params = {
+            col.key: (col.validate(saved_params[col.key]) if col.key in saved_params
+                      else col.default_value(units))
+            for col in self._params
+        }
+        return {"units": units.name, "rows": clean_rows, "edges": clean_edges,
+                "params": clean_params}
+
+    def _apply_state(self, state):
+        """Replace everything with a validated snapshot, then lay out and recompute."""
+        self._units = self.unit_systems[state["units"]]
+        for row in self._rows:
+            _close_row(row)
+        self._rows = []
+        for values in state["rows"]:
+            self._append_row_base(values)
+        for key, values in state["edges"].items():
+            self._edge_values[key] = list(values)
+        self._param_values.update(state["params"])
+        self._refresh_widgets()
         self._update_labels()
-        self._recompute()
+        self._rebuild()
+
+    # ----------------------------------------------------------------- saving
+
+    def _restore(self):
+        where = self._file_label()
+        try:
+            saved = self._store.load(self.persist_key)
+            if saved is None:
+                self._note(f"Inputs will be saved to {where} as “{html.escape(self.persist_key)}”.")
+                return
+            self._apply_state(self._validate_state(saved))
+        except (StateFileError, ValueError) as exc:
+            self._backup_pending = True
+            self._note(f"Couldn't restore the saved inputs ({html.escape(str(exc))}), so the "
+                       "table starts from its initial values. The old file will be kept as a "
+                       ".bak copy when you make a change.", warning=True)
+            return
+        when = saved.get("saved", "")
+        when = f" (saved {html.escape(when[:16].replace('T', ' '))})" if when else ""
+        self._note(f"Restored your saved inputs from {where}{when}.")
+
+    def _autosave(self):
+        if self._store is None or self._loading:
+            return
+        try:
+            if self._backup_pending:
+                backup = self._store.backup()
+                self._backup_pending = False
+                kept = f" The old file was kept as {html.escape(backup.name)}." if backup else ""
+            else:
+                kept = ""
+            saved = self._store.save(self.persist_key, self.get_inputs())
+        except Exception as exc:
+            self._note(f"Couldn't save inputs: {html.escape(f'{type(exc).__name__}: {exc}')}",
+                       warning=True)
+            return
+        self._note(f"Saved to {self._file_label()} at {saved[11:19]}.{kept}")
+
+    def _file_label(self):
+        path = self._store.path
+        return f"<span title='{html.escape(str(path))}'>{html.escape(path.name)}</span>"
+
+    def _note(self, text, warning=False):
+        color = "#b9770e" if warning else "gray"
+        self.persist_note.value = f"<span style='color:{color}; font-size:0.85em'>{text}</span>"
+
+    def _on_reset_click(self, _):
+        if not self._reset_armed:
+            self._reset_armed = True
+            self.reset_button.description = "Confirm reset"
+            self.reset_button.button_style = "warning"
+            return
+        self.reset()
+
+    def _disarm_reset(self):
+        if self.reset_button is not None and self._reset_armed:
+            self._reset_armed = False
+            self.reset_button.description = "Reset"
+            self.reset_button.button_style = ""
 
     # ----------------------------------------------------------------- internals
 
@@ -513,6 +738,8 @@ class RowTable(widgets.VBox):
         except Exception as exc:  # show the problem in the table rather than a hidden traceback
             self._show_error(exc)
         self._notify()
+        self._disarm_reset()
+        self._autosave()
 
     def _show_error(self, exc):
         self.results, self.error = None, exc
@@ -536,6 +763,16 @@ class RowTable(widgets.VBox):
                     "<br><span style='color:#c0392b'>Update callback failed: "
                     f"{html.escape(f'{type(exc).__name__}: {exc}')}</span>"
                 )
+
+
+def _close_row(row):
+    for widget in [*row["widgets"].values(), *row["outputs"].values(), row["remove"]]:
+        widget.close()
+
+
+def _plain(value):
+    """numpy scalars to Python ones, so snapshots are JSON-ready."""
+    return value.item() if hasattr(value, "item") else value
 
 
 def _check_columns(columns):
