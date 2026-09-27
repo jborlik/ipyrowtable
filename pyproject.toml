@@ -1,0 +1,115 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ipyrowtable"
+dynamic = ["version"]
+description = "Editable ipywidgets tables of elements in series, with live computed columns, unit toggles and plots."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+# TODO before publishing: add your name, e.g. { name = "Your Name", email = "jborlik@gmail.com" }
+authors = [{ email = "jborlik@gmail.com" }]
+keywords = ["jupyter", "ipywidgets", "widgets", "table", "engineering", "units", "heat transfer"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Jupyter",
+    "Framework :: Jupyter :: JupyterLab",
+    "Framework :: Jupyter :: JupyterLab :: 4",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "ipywidgets>=8.1",
+    "numpy>=1.23",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.6"]
+test = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "hypothesis>=6.100",
+    "matplotlib>=3.6",
+    "nbclient>=0.10",
+    "nbformat>=5.9",
+    "ipykernel>=6.29",
+]
+ui = [
+    "ipyrowtable[plot,test]",
+    "pytest-ipywidgets>=1.40",
+]
+dev = [
+    "ipyrowtable[plot,test]",
+    "build",
+    "twine>=6.1",
+    "ruff",
+    "jupyterlab>=4",
+]
+
+# TODO before publishing: point these at your repository.
+# [project.urls]
+# Homepage = "https://github.com/<you>/ipyrowtable"
+# Issues = "https://github.com/<you>/ipyrowtable/issues"
+# Changelog = "https://github.com/<you>/ipyrowtable/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "src/ipyrowtable/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src",
+    "tests",
+    "examples",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ipyrowtable"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "-m", "not ui"]
+markers = [
+    "notebooks: executes the example notebooks (needs nbclient, nbformat and ipykernel)",
+    "ui: drives the widgets in a real browser (needs the [ui] extra and Playwright's Chromium); run with -m ui",
+]
+filterwarnings = [
+    # Warnings raised from ipyrowtable's own code are bugs.
+    "error:::ipyrowtable",
+]
+
+[tool.coverage.run]
+source = ["ipyrowtable"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM"]
+ignore = ["SIM108", "C408"]
+
+[tool.ruff.lint.per-file-ignores]
+"examples/*.ipynb" = ["E402", "F401", "B018"]

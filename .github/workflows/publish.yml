@@ -1,0 +1,27 @@
+# Publishes to PyPI when a GitHub release is published, using trusted publishing
+# (no API token needed). One-time setup on PyPI: add this repository as a trusted publisher
+# with workflow "publish.yml" and environment "pypi".
+name: publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Build
+        run: |
+          python -m pip install build twine
+          python -m build
+          python -m twine check --strict dist/*
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
