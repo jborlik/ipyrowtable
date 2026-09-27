@@ -6,7 +6,7 @@ and write a `compute` function; ipyrowtable gives a table where Jupyter users ad
 rows, edit inputs, see computed results update immediately, and easily use the configured inputs
 in downstream cells.
 
-![A layer table with an SI / Imperial toggle and a live temperature profile](docs/screenshot.png)
+![A layer table with an SI / Imperial toggle and a live temperature profile](https://raw.githubusercontent.com/jborlik/ipyrowtable/refs/heads/master/docs/screenshot.png)
 
 What sets it apart from a general-purpose data grid:
 
