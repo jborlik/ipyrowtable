@@ -59,11 +59,10 @@ dev = [
     "jupyterlab>=4",
 ]
 
-# TODO before publishing: point these at your repository.
 # [project.urls]
-# Homepage = "https://github.com/<you>/ipyrowtable"
-# Issues = "https://github.com/<you>/ipyrowtable/issues"
-# Changelog = "https://github.com/<you>/ipyrowtable/blob/main/CHANGELOG.md"
+# Homepage = "https://github.com/jborlik/ipyrowtable"
+# Issues = "https://github.com/jborlik/ipyrowtable/issues"
+# Changelog = "https://github.com/jborlik/ipyrowtable/blob/master/CHANGELOG.md"
 
 [tool.hatch.version]
 path = "src/ipyrowtable/__init__.py"
