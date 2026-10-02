@@ -83,5 +83,6 @@ def test_side_by_side(wall):
     fig = LiveFigure(wall, draw=draw_profile, dpi=50)
     box = side_by_side(wall, fig, gap="10px")
     assert list(box.children) == [wall, fig]
-    assert fig.layout.margin == "0 0 0 10px"
+    assert box.layout.grid_gap == "0 10px"  # between items on a line, not after wrapping
+    assert fig.layout.margin == "0"
     assert box.layout.flex_flow == "row wrap"

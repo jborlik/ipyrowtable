@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Fixed horizontal scrollbars, a few pixels wide, that appeared when nothing needed scrolling.
+  Widgets that fill their slot (`width="100%"`) stuck out of it by their CSS margin. This
+  affected input boxes in the table's last column when it is shown beside a plot, and the
+  parameter boxes above the table.
+- `side_by_side` leaves its gap only between items on the same line, so a plot that wraps
+  below the table on a narrow screen no longer sticks out to the right. It no longer sets
+  the items' margins.
+
 ## 0.1.1
 
 First release.

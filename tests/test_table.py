@@ -33,6 +33,19 @@ class TestLayout:
         assert wall.grid.layout.grid_template_columns.split()[0] == RowTable.REMOVE_WIDTH
         assert len(wall.grid.children) == n_cols * (1 + 1 + 2)  # header, leading row, 2 rows
 
+    def test_cell_widgets_fit_their_cells(self, wall):
+        # `width: 100%` plus the widgets' CSS margin overflows the cell and the grid scrolls;
+        # `auto` lets the grid stretch each widget to fit. (Browser check: tests/ui.)
+        wall.add_row()
+        widths = {c.layout.width for c in wall.grid.children}
+        assert "100%" not in widths
+        assert wall.edge_widget("T", "first").layout.width == "auto"
+
+    def test_parameter_widgets_take_their_column_width(self, cable):
+        # In a box of the column's width, `width: 100%` plus the margin would scroll.
+        current = cable.param_widget("current")
+        assert current.layout.width == NumberColumn.width
+
     def test_headers(self, wall):
         headers = [text(h) for h in wall.grid.children[1:5]]
         assert headers == ["Material", "Thickness (mm)", "R (m²·K/W)", "T (°C)"]

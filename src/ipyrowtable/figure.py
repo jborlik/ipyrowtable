@@ -32,6 +32,9 @@ class LiveFigure(widgets.Image):
                  tight=True):
         super().__init__(format="png")
         self.add_class("ipyrowtable-figure")
+        # No margin: on a narrow screen the image shrinks to the full width, and a margin
+        # would then stick out and make its container scroll.
+        self.layout.margin = "0"
         self.table = table
         self.figsize, self.dpi, self.facecolor, self.tight = size, dpi, facecolor, tight
         if draw is not None:

@@ -127,3 +127,19 @@ def test_reset_button_in_the_browser(solara_test, page_session, tmp_path):
     reset.click()
     wait_until(lambda: len(stack) == 2)
     page.locator(".ipyrowtable-persist", has_text="Reset to the initial values.").wait_for()
+
+
+def test_no_horizontal_scrollbar_when_shrink_wrapped(solara_test, page_session):
+    # Beside a plot, the table is only as wide as its columns, so a cell widget sticking out
+    # of the last column (an editable boundary value here) would make the grid scroll.
+    import ipywidgets as widgets
+
+    from ipyrowtable import side_by_side
+
+    display(side_by_side(LayerStack(), widgets.HTML("plot")))
+    page_session.locator(".ipyrowtable-temperature-first input").wait_for()
+    overflowing = page_session.evaluate("""() =>
+        [document.querySelector('.ipyrowtable'), ...document.querySelectorAll('.ipyrowtable *')]
+            .filter(el => el.scrollWidth > el.clientWidth && el.clientWidth > 0)
+            .map(el => el.className)""")
+    assert overflowing == []

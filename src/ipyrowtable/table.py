@@ -242,8 +242,9 @@ class RowTable(widgets.VBox):
             w.observe(lambda ch, c=col: self._on_param(c, ch.new), names="value")
             label = widgets.HTML()
             self._param_widgets[col.key], self._param_labels[col.key] = w, label
+            _fit(w, col.width)
             boxes.append(widgets.HBox(
-                [label, widgets.Box([w], layout=widgets.Layout(width=col.width))],
+                [label, w],
                 layout=widgets.Layout(margin="0 24px 4px 0", align_items="center"),
             ))
         if boxes:
@@ -702,6 +703,8 @@ class RowTable(widgets.VBox):
                     cells.append(self._edge_widgets[col.key]["last"])
                 else:
                     cells.append(row["outputs"][col.key])
+        for cell in cells:
+            _fit(cell, "auto")
         self.grid.children = cells
         self._recompute()
 
@@ -768,6 +771,17 @@ class RowTable(widgets.VBox):
 def _close_row(row):
     for widget in [*row["widgets"].values(), *row["outputs"].values(), row["remove"]]:
         widget.close()
+
+
+def _fit(widget, width):
+    """Give a widget that asks for the full width of its slot a width that really fits.
+
+    Widgets have a CSS margin, so `width: 100%` sticks out of the slot by the margins and
+    its container shows a scrollbar a few pixels wide. In the grid, `auto` lets the grid
+    stretch the widget to the cell minus its margins; a parameter gets its column's width.
+    """
+    if widget.layout.width == "100%":
+        widget.layout.width = width
 
 
 def _plain(value):
