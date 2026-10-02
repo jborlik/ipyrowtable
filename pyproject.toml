@@ -59,10 +59,10 @@ dev = [
     "jupyterlab>=4",
 ]
 
-# [project.urls]
-# Homepage = "https://github.com/jborlik/ipyrowtable"
-# Issues = "https://github.com/jborlik/ipyrowtable/issues"
-# Changelog = "https://github.com/jborlik/ipyrowtable/blob/master/CHANGELOG.md"
+[project.urls]
+Homepage = "https://github.com/jborlik/ipyrowtable"
+Issues = "https://github.com/jborlik/ipyrowtable/issues"
+Changelog = "https://github.com/jborlik/ipyrowtable/blob/master/CHANGELOG.md"
 
 [tool.hatch.version]
 path = "src/ipyrowtable/__init__.py"
