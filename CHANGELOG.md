@@ -9,6 +9,7 @@
 - `side_by_side` leaves its gap only between items on the same line, so a plot that wraps
   below the table on a narrow screen no longer sticks out to the right. It no longer sets
   the items' margins.
+- Fix commented-out URLS in pyproject.toml
 
 ## 0.1.1
 
