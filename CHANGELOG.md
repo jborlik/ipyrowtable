@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.2
 
 - Fixed horizontal scrollbars, a few pixels wide, that appeared when nothing needed scrolling.
   Widgets that fill their slot (`width="100%"`) stuck out of it by their CSS margin. This

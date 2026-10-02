@@ -104,9 +104,3 @@ ruff check .
      release route runs `.github/workflows/publish.yml` using PyPI trusted publishing. To set
      that up once, add the repository as a trusted publisher on PyPI, with workflow
      `publish.yml` and environment `pypi`.
-
-### Before the first release
-
-- In `pyproject.toml`, add your name to `authors` and fill in `[project.urls]`.
-- PyPI can't show images by relative path. Change the screenshot link in `README.md` to an
-  absolute URL, such as `https://raw.githubusercontent.com/<you>/ipyrowtable/main/docs/screenshot.png`.

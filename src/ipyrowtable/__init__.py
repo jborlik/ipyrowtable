@@ -31,7 +31,7 @@ from .layout import side_by_side
 from .table import RowTable, TableInputs, TableResults
 from .units import Unit, UnitSystem
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 __all__ = [
     "RowTable",
